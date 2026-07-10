@@ -1,5 +1,5 @@
 {
-  "name": "sessionmanger",
+  "name": "session-manager",
   "version": "1.0.0",
   "description": "本地 WebServer，用于读取并展示 `~/.codex` 和 `~/.claude` 下的 session 文件，并按 agent 分栏显示。",
   "main": "server.js",
@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/mwlind/sessionManger#readme",
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2"
   }
 }
