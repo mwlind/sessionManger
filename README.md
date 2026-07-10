@@ -33,6 +33,25 @@ npm run build
 npm start
 ```
 
+## Docker 部署（Dockerfile 方案）
+
+构建镜像：
+
+```bash
+docker build -t session-manager .
+```
+
+运行容器（默认把宿主机 `~/.codex`、`~/.claude` 挂载到容器 `/root/.codex`、`/root/.claude`）：
+
+```bash
+docker run --rm -p 3000:3000 \
+  -v "$HOME/.codex:/root/.codex:ro" \
+  -v "$HOME/.claude:/root/.claude:ro" \
+  session-manager
+```
+
+启动后访问：`http://127.0.0.1:3000`
+
 ## 测试
 
 ```bash
