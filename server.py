@@ -234,9 +234,6 @@ class SessionRequestHandler(BaseHTTPRequestHandler):
         self.send_response(404)
         self.end_headers()
 
-    def log_message(self, format: str, *args: Any) -> None:
-        return
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Local session manager web server")

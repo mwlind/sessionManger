@@ -44,8 +44,12 @@ class SessionServerTests(unittest.TestCase):
             codex.mkdir(parents=True)
             claude.mkdir(parents=True)
 
-            (codex / "a.json").write_text('{"agent":"codex","title":"A"}', encoding="utf-8")
-            (claude / "b.json").write_text('{"agent":"claude","title":"B"}', encoding="utf-8")
+            (codex / "a.json").write_text(
+                '{"session_id":"a1","agent":"codex","title":"A"}', encoding="utf-8"
+            )
+            (claude / "b.json").write_text(
+                '{"session_id":"b1","agent":"claude","title":"B"}', encoding="utf-8"
+            )
 
             grouped = group_by_agent(discover_sessions([codex, claude]))
             html = render_html(grouped)

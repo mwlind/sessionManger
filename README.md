@@ -5,7 +5,7 @@
 ## 运行
 
 ```bash
-python /home/runner/work/sessionManger/sessionManger/server.py --host 127.0.0.1 --port 8000
+python server.py --host 127.0.0.1 --port 8000
 ```
 
 访问：`http://127.0.0.1:8000`
