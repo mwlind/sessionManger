@@ -1,0 +1,29 @@
+{
+  "name": "sessionmanger",
+  "version": "1.0.0",
+  "description": "本地 WebServer，用于读取并展示 `~/.codex` 和 `~/.claude` 下的 session 文件，并按 agent 分栏显示。",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "start": "node server.js",
+    "dev:api": "node server.js",
+    "dev:web": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "install:all": "npm install && npm --prefix frontend install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mwlind/sessionManger.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mwlind/sessionManger/issues"
+  },
+  "homepage": "https://github.com/mwlind/sessionManger#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
