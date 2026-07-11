@@ -7,6 +7,8 @@ const DEFAULT_SESSION_DIRS = [
   path.join(os.homedir(), '.claude'),
 ];
 const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
+const DEFAULT_TEXT_CHUNK_BYTES = 64 * 1024;
+const MAX_TEXT_CHUNK_BYTES = 256 * 1024;
 
 function normalizeString(value) {
   if (value == null) {
@@ -169,6 +171,117 @@ function discoverSessions(sessionDirs = DEFAULT_SESSION_DIRS) {
   return sessions;
 }
 
+function isWithinDirectory(targetPath, baseDir) {
+  try {
+    const absoluteTarget = path.resolve(targetPath);
+    const absoluteBase = path.resolve(baseDir);
+    const targetRealPath = fs.realpathSync(absoluteTarget);
+    const baseRealPath = fs.realpathSync(absoluteBase);
+    const caseInsensitive = process.platform === 'win32';
+    const normalizedTarget = caseInsensitive ? targetRealPath.toLowerCase() : targetRealPath;
+    const normalizedBase = caseInsensitive ? baseRealPath.toLowerCase() : baseRealPath;
+
+    return (
+      normalizedTarget === normalizedBase ||
+      normalizedTarget.startsWith(`${normalizedBase}${path.sep}`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function resolveReadableSessionPath(filePath, sessionDirs = DEFAULT_SESSION_DIRS) {
+  const normalizedPath = normalizeString(filePath);
+  if (!normalizedPath) {
+    return null;
+  }
+
+  const resolvedPath = path.resolve(normalizedPath);
+  const isAllowed = sessionDirs.some((rootDir) => {
+    if (!fs.existsSync(rootDir)) {
+      return false;
+    }
+    return isWithinDirectory(resolvedPath, rootDir);
+  });
+
+  if (!isAllowed) {
+    return null;
+  }
+
+  try {
+    const stat = fs.statSync(resolvedPath);
+    if (!stat.isFile()) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  return resolvedPath;
+}
+
+function readTextChunk(filePath, options = {}) {
+  const resolvedPath = path.resolve(filePath);
+  const rawOffset = Number(options.offset ?? 0);
+  const rawChunkBytes = Number(options.chunkBytes ?? DEFAULT_TEXT_CHUNK_BYTES);
+  const chunkBytes = Math.min(
+    MAX_TEXT_CHUNK_BYTES,
+    Math.max(1, Number.isFinite(rawChunkBytes) ? rawChunkBytes : DEFAULT_TEXT_CHUNK_BYTES),
+  );
+  const offset = Math.max(0, Number.isFinite(rawOffset) ? Math.floor(rawOffset) : 0);
+
+  const stat = fs.statSync(resolvedPath);
+  const totalBytes = stat.size;
+  const start = Math.min(offset, totalBytes);
+  const remaining = Math.max(0, totalBytes - start);
+  const bytesToRead = Math.min(chunkBytes, remaining);
+
+  if (bytesToRead === 0) {
+    return {
+      content: '',
+      offset: start,
+      next_offset: start,
+      prev_offset: Math.max(0, start - chunkBytes),
+      has_more: false,
+      total_bytes: totalBytes,
+      read_bytes: 0,
+    };
+  }
+
+  const fileHandle = fs.openSync(resolvedPath, 'r');
+  try {
+    const buffer = Buffer.alloc(MAX_TEXT_CHUNK_BYTES);
+    const readBytes = fs.readSync(fileHandle, buffer, 0, bytesToRead, start);
+    const nextOffset = start + readBytes;
+
+    return {
+      content: buffer.subarray(0, readBytes).toString('utf-8'),
+      offset: start,
+      next_offset: nextOffset,
+      prev_offset: Math.max(0, start - chunkBytes),
+      has_more: nextOffset < totalBytes,
+      total_bytes: totalBytes,
+      read_bytes: readBytes,
+    };
+  } finally {
+    fs.closeSync(fileHandle);
+  }
+}
+
+function readFullText(filePath) {
+  const resolvedPath = path.resolve(filePath);
+  const stat = fs.statSync(resolvedPath);
+
+  if (stat.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error(`File too large: ${stat.size} bytes exceeds limit of ${MAX_FILE_SIZE_BYTES} bytes`);
+  }
+
+  return {
+    content: fs.readFileSync(resolvedPath, 'utf-8'),
+    total_bytes: stat.size,
+  };
+}
+
 function groupByAgent(sessions) {
   const grouped = {};
   for (const session of sessions) {
@@ -186,7 +299,11 @@ function groupByAgent(sessions) {
 }
 
 module.exports = {
+  DEFAULT_TEXT_CHUNK_BYTES,
   DEFAULT_SESSION_DIRS,
   discoverSessions,
   groupByAgent,
+  readFullText,
+  readTextChunk,
+  resolveReadableSessionPath,
 };

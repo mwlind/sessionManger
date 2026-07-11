@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { discoverSessions, groupByAgent } = require('../sessionService');
+const { discoverSessions, groupByAgent, readFullText, readTextChunk, resolveReadableSessionPath } = require('../sessionService');
 
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'session-manager-'));
@@ -53,4 +53,50 @@ test('groupByAgent sorts agent keys', () => {
   ]);
 
   assert.deepEqual(Object.keys(grouped), ['Alpha', 'zeta']);
+});
+
+test('resolveReadableSessionPath only allows files under configured roots', () => {
+  const tempRoot = makeTempDir();
+  const codexRoot = path.join(tempRoot, '.codex');
+  const otherRoot = path.join(tempRoot, 'other');
+  fs.mkdirSync(codexRoot, { recursive: true });
+  fs.mkdirSync(otherRoot, { recursive: true });
+
+  const allowedFile = path.join(codexRoot, 'session.log');
+  const blockedFile = path.join(otherRoot, 'blocked.log');
+  fs.writeFileSync(allowedFile, 'ok', 'utf-8');
+  fs.writeFileSync(blockedFile, 'no', 'utf-8');
+
+  assert.equal(resolveReadableSessionPath(allowedFile, [codexRoot]), allowedFile);
+  assert.equal(resolveReadableSessionPath(blockedFile, [codexRoot]), null);
+});
+
+test('readTextChunk reads file by chunks', () => {
+  const tempRoot = makeTempDir();
+  const filePath = path.join(tempRoot, 'chunk.log');
+  fs.writeFileSync(filePath, '0123456789', 'utf-8');
+
+  const first = readTextChunk(filePath, { offset: 0, chunkBytes: 4 });
+  assert.equal(first.content, '0123');
+  assert.equal(first.has_more, true);
+  assert.equal(first.next_offset, 4);
+
+  const second = readTextChunk(filePath, { offset: first.next_offset, chunkBytes: 4 });
+  assert.equal(second.content, '4567');
+  assert.equal(second.has_more, true);
+
+  const last = readTextChunk(filePath, { offset: second.next_offset, chunkBytes: 4 });
+  assert.equal(last.content, '89');
+  assert.equal(last.has_more, false);
+});
+
+test('readFullText returns complete file content', () => {
+  const tempRoot = makeTempDir();
+  const filePath = path.join(tempRoot, 'full.log');
+  const text = 'Hello\nWorld\nLine3';
+  fs.writeFileSync(filePath, text, 'utf-8');
+
+  const result = readFullText(filePath);
+  assert.equal(result.content, text);
+  assert.equal(result.total_bytes, Buffer.byteLength(text, 'utf-8'));
 });
