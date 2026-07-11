@@ -4,6 +4,12 @@ import { computed, onMounted, ref } from 'vue'
 const loading = ref(true)
 const error = ref('')
 const groupedAgents = ref({})
+const selectedSession = ref(null)
+const viewerLoading = ref(false)
+const viewerError = ref('')
+const viewerContent = ref('')
+const viewerMeta = ref({ offset: 0, next_offset: 0, prev_offset: 0, has_more: false, total_bytes: 0, read_bytes: 0 })
+const chunkBytes = 65536
 
 const sortedAgents = computed(() => Object.entries(groupedAgents.value))
 
@@ -25,6 +31,39 @@ async function loadSessions() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadSessionChunk(offset = 0) {
+  if (!selectedSession.value) return
+  viewerLoading.value = true
+  viewerError.value = ''
+
+  try {
+    const params = new URLSearchParams({
+      path: selectedSession.value.path,
+      offset: String(Math.max(0, offset)),
+      chunk_bytes: String(chunkBytes),
+    })
+    const response = await fetch(`/api/session-content?${params.toString()}`)
+    if (!response.ok) {
+      throw new Error(`Request failed: ${response.status}`)
+    }
+
+    const payload = await response.json()
+    viewerContent.value = payload.content || ''
+    viewerMeta.value = payload
+  } catch (err) {
+    viewerError.value = err instanceof Error ? err.message : 'Unknown error'
+    viewerContent.value = ''
+    viewerMeta.value = { offset: 0, next_offset: 0, prev_offset: 0, has_more: false, total_bytes: 0, read_bytes: 0 }
+  } finally {
+    viewerLoading.value = false
+  }
+}
+
+function openSession(session) {
+  selectedSession.value = session
+  loadSessionChunk(0)
 }
 
 onMounted(loadSessions)
@@ -53,8 +92,36 @@ onMounted(loadSessions)
           <p><strong>来源:</strong> {{ session.source }}</p>
           <p><strong>更新时间:</strong> {{ session.updated_at }}</p>
           <p class="path"><strong>路径:</strong> {{ session.path }}</p>
+          <button @click="openSession(session)">查看文本</button>
         </div>
       </article>
     </section>
+
+    <section v-if="selectedSession" class="viewer">
+      <h2>文本查看：{{ selectedSession.title }}</h2>
+      <p class="path">{{ selectedSession.path }}</p>
+      <p class="info">偏移 {{ viewerMeta.offset }}，本次读取 {{ viewerMeta.read_bytes }} 字节，总大小 {{ viewerMeta.total_bytes }} 字节</p>
+      <p v-if="viewerLoading" class="info">文本加载中...</p>
+      <p v-else-if="viewerError" class="error">读取失败：{{ viewerError }}</p>
+      <pre v-else class="content">{{ viewerContent || '(空文件)' }}</pre>
+      <div class="controls">
+        <button :disabled="viewerLoading || viewerMeta.offset <= 0" @click="loadSessionChunk(viewerMeta.prev_offset)">上一段</button>
+        <button :disabled="viewerLoading || !viewerMeta.has_more" @click="loadSessionChunk(viewerMeta.next_offset)">下一段</button>
+      </div>
+    </section>
   </main>
 </template>
+
+<style scoped>
+.page { padding: 1rem; font-family: system-ui, sans-serif; }
+.header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.75rem; }
+.column { border: 1px solid #ddd; border-radius: 8px; padding: 0.75rem; }
+.card { border: 1px solid #eee; border-radius: 6px; padding: 0.5rem; margin-bottom: 0.5rem; }
+.path { word-break: break-all; color: #555; }
+.viewer { margin-top: 1rem; border: 1px solid #ddd; border-radius: 8px; padding: 0.75rem; }
+.content { max-height: 420px; overflow: auto; background: #111; color: #e8e8e8; padding: 0.75rem; border-radius: 6px; white-space: pre-wrap; }
+.controls { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.error { color: #b42318; }
+.info { color: #344054; }
+</style>

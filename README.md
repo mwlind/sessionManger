@@ -3,7 +3,7 @@
 Node.js + Express + Vue3(Vite) 本地 Session 管理器：
 - 后端读取 `~/.codex`、`~/.claude` 下的会话文件
 - 按 agent 分组后通过 `GET /api/sessions` 返回 JSON
-- 前端按 agent 分栏展示会话卡片
+- 前端按 agent 分栏展示会话卡片，并支持按块读取纯文本内容进行查看（不整文件加载）
 
 ## 安装依赖
 

@@ -2,7 +2,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const { rateLimit } = require('express-rate-limit');
-const { discoverSessions, groupByAgent } = require('./sessionService');
+const {
+  DEFAULT_SESSION_DIRS,
+  discoverSessions,
+  groupByAgent,
+  readTextChunk,
+  resolveReadableSessionPath,
+} = require('./sessionService');
 
 const app = express();
 const host = process.env.HOST || '127.0.0.1';
@@ -17,9 +23,11 @@ const sessionApiRateLimit = rateLimit({
 });
 const CACHE_REFRESH_INTERVAL_MS = 5000;
 let cachedGroupedSessions = {};
+let cachedSessions = [];
 
 function refreshSessionCache() {
-  cachedGroupedSessions = groupByAgent(discoverSessions());
+  cachedSessions = discoverSessions();
+  cachedGroupedSessions = groupByAgent(cachedSessions);
 }
 
 refreshSessionCache();
@@ -27,6 +35,29 @@ setInterval(refreshSessionCache, CACHE_REFRESH_INTERVAL_MS).unref();
 
 app.get('/api/sessions', sessionApiRateLimit, (_req, res) => {
   res.json({ agents: cachedGroupedSessions });
+});
+
+app.get('/api/session-content', sessionApiRateLimit, (req, res) => {
+  const requestedPath = String(req.query.path || '');
+  const resolvedPath = resolveReadableSessionPath(requestedPath, DEFAULT_SESSION_DIRS);
+  const isKnownSessionFile = cachedSessions.some((session) => session.path === resolvedPath);
+
+  if (!resolvedPath || !isKnownSessionFile) {
+    res.status(404).json({ error: 'Session file not found' });
+    return;
+  }
+
+  try {
+    const offset = Number(req.query.offset || 0);
+    const chunkBytes = Number(req.query.chunk_bytes || undefined);
+    const chunk = readTextChunk(resolvedPath, { offset, chunkBytes });
+    res.json({
+      path: resolvedPath,
+      ...chunk,
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to read file content' });
+  }
 });
 
 if (fs.existsSync(frontendDistDir)) {
