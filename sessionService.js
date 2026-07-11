@@ -268,6 +268,20 @@ function readTextChunk(filePath, options = {}) {
   }
 }
 
+function readFullText(filePath) {
+  const resolvedPath = path.resolve(filePath);
+  const stat = fs.statSync(resolvedPath);
+
+  if (stat.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error(`File too large: ${stat.size} bytes exceeds limit of ${MAX_FILE_SIZE_BYTES} bytes`);
+  }
+
+  return {
+    content: fs.readFileSync(resolvedPath, 'utf-8'),
+    total_bytes: stat.size,
+  };
+}
+
 function groupByAgent(sessions) {
   const grouped = {};
   for (const session of sessions) {
@@ -289,6 +303,7 @@ module.exports = {
   DEFAULT_SESSION_DIRS,
   discoverSessions,
   groupByAgent,
+  readFullText,
   readTextChunk,
   resolveReadableSessionPath,
 };

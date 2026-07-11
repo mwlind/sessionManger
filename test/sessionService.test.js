@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { discoverSessions, groupByAgent, readTextChunk, resolveReadableSessionPath } = require('../sessionService');
+const { discoverSessions, groupByAgent, readFullText, readTextChunk, resolveReadableSessionPath } = require('../sessionService');
 
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'session-manager-'));
@@ -88,4 +88,15 @@ test('readTextChunk reads file by chunks', () => {
   const last = readTextChunk(filePath, { offset: second.next_offset, chunkBytes: 4 });
   assert.equal(last.content, '89');
   assert.equal(last.has_more, false);
+});
+
+test('readFullText returns complete file content', () => {
+  const tempRoot = makeTempDir();
+  const filePath = path.join(tempRoot, 'full.log');
+  const text = 'Hello\nWorld\nLine3';
+  fs.writeFileSync(filePath, text, 'utf-8');
+
+  const result = readFullText(filePath);
+  assert.equal(result.content, text);
+  assert.equal(result.total_bytes, Buffer.byteLength(text, 'utf-8'));
 });

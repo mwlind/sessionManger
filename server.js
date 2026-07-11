@@ -6,6 +6,7 @@ const {
   DEFAULT_SESSION_DIRS,
   discoverSessions,
   groupByAgent,
+  readFullText,
   readTextChunk,
   resolveReadableSessionPath,
 } = require('./sessionService');
@@ -37,6 +38,24 @@ setInterval(refreshSessionCache, CACHE_REFRESH_INTERVAL_MS).unref();
 
 app.get('/api/sessions', sessionApiRateLimit, (_req, res) => {
   res.json({ agents: cachedGroupedSessions });
+});
+
+app.get('/api/session-full', sessionApiRateLimit, (req, res) => {
+  const requestedPath = String(req.query.path || '');
+  const resolvedPath = resolveReadableSessionPath(requestedPath, DEFAULT_SESSION_DIRS);
+  const isKnownSessionFile = resolvedPath ? cachedSessionPaths.has(resolvedPath) : false;
+
+  if (!resolvedPath || !isKnownSessionFile) {
+    res.status(404).json({ error: 'Session file not found' });
+    return;
+  }
+
+  try {
+    const result = readFullText(resolvedPath);
+    res.json({ path: resolvedPath, ...result });
+  } catch {
+    res.status(500).json({ error: 'Failed to read file content' });
+  }
 });
 
 app.get('/api/session-content', sessionApiRateLimit, (req, res) => {

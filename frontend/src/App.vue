@@ -8,9 +8,7 @@ const selectedSession = ref(null)
 const viewerLoading = ref(false)
 const viewerError = ref('')
 const viewerContent = ref('')
-const createDefaultViewerMeta = () => ({ offset: 0, nextOffset: 0, prevOffset: 0, hasMore: false, totalBytes: 0, readBytes: 0 })
-const viewerMeta = ref(createDefaultViewerMeta())
-const chunkSizeBytes = 65536
+const viewerTotalBytes = ref(0)
 
 const sortedAgents = computed(() => Object.entries(groupedAgents.value))
 
@@ -34,44 +32,28 @@ async function loadSessions() {
   }
 }
 
-async function loadSessionChunk(offset = 0) {
-  if (!selectedSession.value) return
+async function openSession(session) {
+  selectedSession.value = session
   viewerLoading.value = true
   viewerError.value = ''
+  viewerContent.value = ''
+  viewerTotalBytes.value = 0
 
   try {
-    const params = new URLSearchParams({
-      path: selectedSession.value.path,
-      offset: String(Math.max(0, offset)),
-      chunk_bytes: String(chunkSizeBytes),
-    })
-    const response = await fetch(`/api/session-content?${params.toString()}`)
+    const params = new URLSearchParams({ path: session.path })
+    const response = await fetch(`/api/session-full?${params.toString()}`)
     if (!response.ok) {
       throw new Error(`Request failed: ${response.status}`)
     }
 
     const payload = await response.json()
     viewerContent.value = payload.content || ''
-    viewerMeta.value = {
-      offset: payload.offset ?? 0,
-      nextOffset: payload.next_offset ?? 0,
-      prevOffset: payload.prev_offset ?? 0,
-      hasMore: payload.has_more ?? false,
-      totalBytes: payload.total_bytes ?? 0,
-      readBytes: payload.read_bytes ?? 0,
-    }
+    viewerTotalBytes.value = payload.total_bytes ?? 0
   } catch (err) {
     viewerError.value = err instanceof Error ? err.message : 'Unknown error'
-    viewerContent.value = ''
-    viewerMeta.value = createDefaultViewerMeta()
   } finally {
     viewerLoading.value = false
   }
-}
-
-function openSession(session) {
-  selectedSession.value = session
-  loadSessionChunk(0)
 }
 
 onMounted(loadSessions)
@@ -108,14 +90,10 @@ onMounted(loadSessions)
     <section v-if="selectedSession" class="viewer">
       <h2>文本查看：{{ selectedSession.title }}</h2>
       <p class="path">{{ selectedSession.path }}</p>
-      <p class="info">偏移 {{ viewerMeta.offset }}，本次读取 {{ viewerMeta.readBytes }} 字节，总大小 {{ viewerMeta.totalBytes }} 字节</p>
+      <p v-if="viewerTotalBytes > 0" class="info">共 {{ viewerTotalBytes }} 字节</p>
       <p v-if="viewerLoading" class="info">文本加载中...</p>
       <p v-else-if="viewerError" class="error">读取失败：{{ viewerError }}</p>
       <pre v-else class="content" role="region" aria-label="Session file content">{{ viewerContent || '(空文件)' }}</pre>
-      <div class="controls">
-        <button :disabled="viewerLoading || viewerMeta.offset <= 0" @click="loadSessionChunk(viewerMeta.prevOffset)">上一段</button>
-        <button :disabled="viewerLoading || !viewerMeta.hasMore" @click="loadSessionChunk(viewerMeta.nextOffset)">下一段</button>
-      </div>
     </section>
   </main>
 </template>
@@ -128,8 +106,7 @@ onMounted(loadSessions)
 .card { border: 1px solid #eee; border-radius: 6px; padding: 0.5rem; margin-bottom: 0.5rem; }
 .path { word-break: break-all; color: #555; }
 .viewer { margin-top: 1rem; border: 1px solid #ddd; border-radius: 8px; padding: 0.75rem; }
-.content { max-height: 420px; overflow: auto; background: #111; color: #e8e8e8; padding: 0.75rem; border-radius: 6px; white-space: pre-wrap; }
-.controls { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.content { max-height: 600px; overflow: auto; background: #111; color: #e8e8e8; padding: 0.75rem; border-radius: 6px; white-space: pre-wrap; }
 .error { color: #b42318; }
 .info { color: #344054; }
 </style>
