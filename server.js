@@ -24,10 +24,12 @@ const sessionApiRateLimit = rateLimit({
 const CACHE_REFRESH_INTERVAL_MS = 5000;
 let cachedGroupedSessions = {};
 let cachedSessions = [];
+let cachedSessionPaths = new Set();
 
 function refreshSessionCache() {
   cachedSessions = discoverSessions();
   cachedGroupedSessions = groupByAgent(cachedSessions);
+  cachedSessionPaths = new Set(cachedSessions.map((session) => session.path));
 }
 
 refreshSessionCache();
@@ -40,7 +42,7 @@ app.get('/api/sessions', sessionApiRateLimit, (_req, res) => {
 app.get('/api/session-content', sessionApiRateLimit, (req, res) => {
   const requestedPath = String(req.query.path || '');
   const resolvedPath = resolveReadableSessionPath(requestedPath, DEFAULT_SESSION_DIRS);
-  const isKnownSessionFile = cachedSessions.some((session) => session.path === resolvedPath);
+  const isKnownSessionFile = resolvedPath ? cachedSessionPaths.has(resolvedPath) : false;
 
   if (!resolvedPath || !isKnownSessionFile) {
     res.status(404).json({ error: 'Session file not found' });
@@ -49,7 +51,7 @@ app.get('/api/session-content', sessionApiRateLimit, (req, res) => {
 
   try {
     const offset = Number(req.query.offset || 0);
-    const chunkBytes = Number(req.query.chunk_bytes || undefined);
+    const chunkBytes = req.query.chunk_bytes ? Number(req.query.chunk_bytes) : undefined;
     const chunk = readTextChunk(resolvedPath, { offset, chunkBytes });
     res.json({
       path: resolvedPath,

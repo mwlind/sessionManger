@@ -8,8 +8,9 @@ const selectedSession = ref(null)
 const viewerLoading = ref(false)
 const viewerError = ref('')
 const viewerContent = ref('')
-const viewerMeta = ref({ offset: 0, next_offset: 0, prev_offset: 0, has_more: false, total_bytes: 0, read_bytes: 0 })
-const chunkBytes = 65536
+const createDefaultViewerMeta = () => ({ offset: 0, nextOffset: 0, prevOffset: 0, hasMore: false, totalBytes: 0, readBytes: 0 })
+const viewerMeta = ref(createDefaultViewerMeta())
+const chunkSizeBytes = 65536
 
 const sortedAgents = computed(() => Object.entries(groupedAgents.value))
 
@@ -42,7 +43,7 @@ async function loadSessionChunk(offset = 0) {
     const params = new URLSearchParams({
       path: selectedSession.value.path,
       offset: String(Math.max(0, offset)),
-      chunk_bytes: String(chunkBytes),
+      chunk_bytes: String(chunkSizeBytes),
     })
     const response = await fetch(`/api/session-content?${params.toString()}`)
     if (!response.ok) {
@@ -51,11 +52,18 @@ async function loadSessionChunk(offset = 0) {
 
     const payload = await response.json()
     viewerContent.value = payload.content || ''
-    viewerMeta.value = payload
+    viewerMeta.value = {
+      offset: payload.offset ?? 0,
+      nextOffset: payload.next_offset ?? 0,
+      prevOffset: payload.prev_offset ?? 0,
+      hasMore: payload.has_more ?? false,
+      totalBytes: payload.total_bytes ?? 0,
+      readBytes: payload.read_bytes ?? 0,
+    }
   } catch (err) {
     viewerError.value = err instanceof Error ? err.message : 'Unknown error'
     viewerContent.value = ''
-    viewerMeta.value = { offset: 0, next_offset: 0, prev_offset: 0, has_more: false, total_bytes: 0, read_bytes: 0 }
+    viewerMeta.value = createDefaultViewerMeta()
   } finally {
     viewerLoading.value = false
   }
@@ -100,13 +108,13 @@ onMounted(loadSessions)
     <section v-if="selectedSession" class="viewer">
       <h2>文本查看：{{ selectedSession.title }}</h2>
       <p class="path">{{ selectedSession.path }}</p>
-      <p class="info">偏移 {{ viewerMeta.offset }}，本次读取 {{ viewerMeta.read_bytes }} 字节，总大小 {{ viewerMeta.total_bytes }} 字节</p>
+      <p class="info">偏移 {{ viewerMeta.offset }}，本次读取 {{ viewerMeta.readBytes }} 字节，总大小 {{ viewerMeta.totalBytes }} 字节</p>
       <p v-if="viewerLoading" class="info">文本加载中...</p>
       <p v-else-if="viewerError" class="error">读取失败：{{ viewerError }}</p>
-      <pre v-else class="content">{{ viewerContent || '(空文件)' }}</pre>
+      <pre v-else class="content" role="region" aria-label="Session file content">{{ viewerContent || '(空文件)' }}</pre>
       <div class="controls">
-        <button :disabled="viewerLoading || viewerMeta.offset <= 0" @click="loadSessionChunk(viewerMeta.prev_offset)">上一段</button>
-        <button :disabled="viewerLoading || !viewerMeta.has_more" @click="loadSessionChunk(viewerMeta.next_offset)">下一段</button>
+        <button :disabled="viewerLoading || viewerMeta.offset <= 0" @click="loadSessionChunk(viewerMeta.prevOffset)">上一段</button>
+        <button :disabled="viewerLoading || !viewerMeta.hasMore" @click="loadSessionChunk(viewerMeta.nextOffset)">下一段</button>
       </div>
     </section>
   </main>

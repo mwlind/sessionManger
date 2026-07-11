@@ -172,9 +172,22 @@ function discoverSessions(sessionDirs = DEFAULT_SESSION_DIRS) {
 }
 
 function isWithinDirectory(targetPath, baseDir) {
-  const absoluteTarget = path.resolve(targetPath);
-  const absoluteBase = path.resolve(baseDir);
-  return absoluteTarget === absoluteBase || absoluteTarget.startsWith(`${absoluteBase}${path.sep}`);
+  try {
+    const absoluteTarget = path.resolve(targetPath);
+    const absoluteBase = path.resolve(baseDir);
+    const targetRealPath = fs.realpathSync(absoluteTarget);
+    const baseRealPath = fs.realpathSync(absoluteBase);
+    const caseInsensitive = process.platform === 'win32';
+    const normalizedTarget = caseInsensitive ? targetRealPath.toLowerCase() : targetRealPath;
+    const normalizedBase = caseInsensitive ? baseRealPath.toLowerCase() : baseRealPath;
+
+    return (
+      normalizedTarget === normalizedBase ||
+      normalizedTarget.startsWith(`${normalizedBase}${path.sep}`)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function resolveReadableSessionPath(filePath, sessionDirs = DEFAULT_SESSION_DIRS) {
@@ -211,7 +224,10 @@ function readTextChunk(filePath, options = {}) {
   const resolvedPath = path.resolve(filePath);
   const rawOffset = Number(options.offset ?? 0);
   const rawChunkBytes = Number(options.chunkBytes ?? DEFAULT_TEXT_CHUNK_BYTES);
-  const chunkBytes = Math.min(MAX_TEXT_CHUNK_BYTES, Math.max(1024, Number.isFinite(rawChunkBytes) ? rawChunkBytes : DEFAULT_TEXT_CHUNK_BYTES));
+  const chunkBytes = Math.min(
+    MAX_TEXT_CHUNK_BYTES,
+    Math.max(1, Number.isFinite(rawChunkBytes) ? rawChunkBytes : DEFAULT_TEXT_CHUNK_BYTES),
+  );
   const offset = Math.max(0, Number.isFinite(rawOffset) ? Math.floor(rawOffset) : 0);
 
   const stat = fs.statSync(resolvedPath);
@@ -234,7 +250,7 @@ function readTextChunk(filePath, options = {}) {
 
   const fileHandle = fs.openSync(resolvedPath, 'r');
   try {
-    const buffer = Buffer.allocUnsafe(bytesToRead);
+    const buffer = Buffer.alloc(MAX_TEXT_CHUNK_BYTES);
     const readBytes = fs.readSync(fileHandle, buffer, 0, bytesToRead, start);
     const nextOffset = start + readBytes;
 
